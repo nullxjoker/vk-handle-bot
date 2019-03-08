@@ -1,8 +1,5 @@
 from collections import namedtuple
-try:
-	import vk as vk_api
-except:
-	raise Exceptions("do pip install vk")
+import vk as vk_api
 import time
 import threading
 import random
