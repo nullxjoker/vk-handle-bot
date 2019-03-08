@@ -1,6 +1,11 @@
+from flask import Flask, request
 from vk_handle_bot import VkBot
+import json
 
+
+app = Flask(__name__)
 bot = VkBot(token="your token")
+
 
 def start(e):
 	bot.send_message(text=f"Привет, {e.from_id}", peer_id=e.peer_id)
@@ -34,4 +39,15 @@ def getByPhoto(e):
 def unknownCommand(e):
 	bot.send_message(text="Неизвестная команда", peer_id=e.peer_id)
 
-bot.polling(interval=1)
+@app.route('/vk', methods=['GET', 'POST', 'DELETE'])
+def vkontakte():
+	data = json.loads(request.data)
+	if "type" not in data.keys():
+		return "not vk"
+	if data['type'] == "confirmation":
+		return "e0df84a3"
+	elif data['type'] == "message_new":
+		bot.process_new_update(data['object'])
+		return 'ok'
+
+app.run(host="0.0.0.0", debug=True, port=80)
