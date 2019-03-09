@@ -109,18 +109,27 @@ class VkBot :
 	def polling(self, interval=1) :
 		last_ts = None
 		ts = self.vk.messages.getLongPollServer()['ts']
+		try: my_id = self.vk.users.get()[0]['id']
+		except: my_id = None
 		while True :
-			update = self.vk.messages.getLongPollHistory(
+			updates = self.vk.messages.getLongPollHistory(
 				ts=ts, fields="photo,photo_medium_rec,sex,online,screen_name"
-				)['messages']['items']
-			if (ts != last_ts and len(update) > 0 and update != self.last_update 
-				and update[0]['from_id'] != self.vk.users.get()[0]['id']) :
-				th = threading.Thread(
-					target=lambda:self.process_new_update(update[0])
-					)
-				th.start()
-				last_ts = ts
-				self.last_update = update
+			)['messages']['items']
+			try:
+				if (ts != last_ts and len(updates[0]) > 0
+					and updates[0] != self.last_update
+					and "-" not in str(updates[0]['from_id'])
+					and updates[0]['from_id'] != my_id
+					) :
+					th = threading.Thread(
+						target=lambda:self.process_new_update(updates[0])
+						)
+					th.start()
+					last_ts = ts
+					self.last_update = updates[0]
+			except IndexError:
+				pass
+
 			ts = self.vk.messages.getLongPollServer()['ts']
 			time.sleep(interval)
 			
