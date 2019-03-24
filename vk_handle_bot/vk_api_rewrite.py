@@ -7,7 +7,7 @@ from enum import Enum
 from collections import namedtuple
 
 import vk_api
-from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType, DotDict
+from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType, DotDict, VkBotMessageEvent
 
 class KeyboardColor(Enum):
 	"""
@@ -22,20 +22,30 @@ class VkBot:
 	priveleged_types = {
 		"text": r"\w+"
 	}
-	def __init__(self, token, group_id=None):
+	def __init__(self, token, group_id=None, tokens=None):
+
+		self.loading_payload = False
+		self.before_function = None
+		self.after_function = None
+		self.default_function = None
+
+
 		self.decorated = list()
-		self.last_update = None
 		self.next_steps = dict()
-		self.before_function = False
-		self.after_function = False
+		self.last_update = None
+
+		self.vk_session = self.new_vk_session(token)
+		self.vk = self.vk_session.get_api()
 
 		if group_id != None:
-			self.vk_session = self.new_vk_session(token)
-			self.vk = self.vk_session.get_api()
 			self.long_poll = VkBotLongPoll(self.vk_session, group_id)
 
+		if tokens != None:
+			for arg in tokens:
+				self.__dict__[arg['name']] = self.new_vk_session(arg['token'])
+
 	def to_event_object(self, raw):
-		return DotDict(raw)
+		return VkBotMessageEvent(raw)
 
 	def new_vk_session(self, token):
 		return vk_api.VkApi(token=token)
@@ -49,13 +59,13 @@ class VkBot:
 	def message_handler(self, **kwargs):
 		def decorate(function):
 			def wrapper(e):
-				if self.before_function != False:
+				if self.before_function != None:
 					try: self.before_function(e)
 					except Exception as s:
 						print(f"Остановлена работа скрипта. {s}")
 						return
 				function(e)
-				if self.after_function != False:
+				if self.after_function != None:
 					self.after_function(e)
 			self.decorated.append(dict(function=wrapper, options=kwargs))
 			return wrapper
@@ -82,6 +92,13 @@ class VkBot:
 							if function == None:
 								for text in executable['options'].get("texts"):
 									if text == update.text:
+										function = executable['function']
+										break
+
+						if executable['options'].get('texts_lower') != None:
+							if function == None:
+								for text in executable['options'].get("texts_lower"):
+									if text == update.text.lower():
 										function = executable['function']
 										break
 
@@ -115,9 +132,16 @@ class VkBot:
 			else:
 				function = self.next_steps[update.user_id]
 
+			try: update.payload = json.loads(update.payload) if self.loading_payload != False else update.payload
+			except: pass
+			try: update.__dict__.update({"splitted":update.text.split(" ")})
+			except Exception as e: print(e)
 			if function != None:
 				function(update)
-				self.last_update = update
+			else:
+				if self.default_function != None:
+					self.default_function(update)
+			self.last_update = update
 		else:
 			return "Already processed"
 
