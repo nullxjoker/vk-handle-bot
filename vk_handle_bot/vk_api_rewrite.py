@@ -14,9 +14,9 @@ class KeyboardColor(Enum):
     Возможные цвета кнопок
     """
 	PRIMARY = "primary" # синяя
-    DEFAULT = "default" # белая
-    NEGATIVE = "negative" # красная
-    POSITIVE = "positive" # зелёная
+	DEFAULT = "default" # белая
+	NEGATIVE = "negative" # красная
+	POSITIVE = "positive" # зелёная
 
 class VkBot:
 	priveleged_types = {
