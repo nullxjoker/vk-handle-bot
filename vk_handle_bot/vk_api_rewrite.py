@@ -7,12 +7,12 @@ from enum import Enum
 from collections import namedtuple
 
 import vk_api
-from vk_api.longpoll import VkLongPoll, VkEventType
+from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType
 
 class KeyboardColor(Enum):
-    """
-    Возможные цвета кнопок
-    """
+	"""
+	Возможные цвета кнопок
+	"""
 	PRIMARY = "primary" # синяя
 	DEFAULT = "default" # белая
 	NEGATIVE = "negative" # красная
@@ -22,7 +22,7 @@ class VkBot:
 	priveleged_types = {
 		"text": r"\w+"
 	}
-	def __init__(self, token):
+	def __init__(self, token, group_id):
 		self.decorated = list()
 		self.last_update = None
 		self.next_steps = dict()
@@ -31,7 +31,7 @@ class VkBot:
 
 		self.vk_session = self.new_vk_session(token)
 		self.vk = self.vk_session.get_api()
-		self.long_poll = VkLongPoll(self.vk_session)
+		self.long_poll = VkBotLongPoll(self.vk_session, group_id)
 
 	def new_vk_session(self, token):
 		return vk_api.VkApi(token=token)
@@ -118,8 +118,9 @@ class VkBot:
 
 	def polling(self):
 		for event in self.long_poll.listen():
-			if event.type == VkEventType.MESSAGE_NEW and event.to_me:
-				self.process_new_update(event)
+			print(event)
+			if event.type == VkBotEventType.MESSAGE_NEW:
+				self.process_new_update(event.object)
 
 	def send_message(self, text, peer_id, attachment=None, keyboard=None):
 		return self.vk.messages.send(
