@@ -1,0 +1,1 @@
+from vk_handle_bot.bot import VkBot
