@@ -7,7 +7,7 @@ from enum import Enum
 from collections import namedtuple
 
 import vk_api
-from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType
+from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType, DotDict
 
 class KeyboardColor(Enum):
 	"""
@@ -22,16 +22,20 @@ class VkBot:
 	priveleged_types = {
 		"text": r"\w+"
 	}
-	def __init__(self, token, group_id):
+	def __init__(self, token, group_id=None):
 		self.decorated = list()
 		self.last_update = None
 		self.next_steps = dict()
 		self.before_function = False
 		self.after_function = False
 
-		self.vk_session = self.new_vk_session(token)
-		self.vk = self.vk_session.get_api()
-		self.long_poll = VkBotLongPoll(self.vk_session, group_id)
+		if group_id != None:
+			self.vk_session = self.new_vk_session(token)
+			self.vk = self.vk_session.get_api()
+			self.long_poll = VkBotLongPoll(self.vk_session, group_id)
+
+	def to_event_object(self, raw):
+		return DotDict(raw)
 
 	def new_vk_session(self, token):
 		return vk_api.VkApi(token=token)
@@ -62,6 +66,7 @@ class VkBot:
 
 	def process_new_update(self, update):
 		function = None
+		print(update.__dict__)
 		if update != self.last_update:
 			if self.next_steps.get(update.user_id) == None:
 				for executable in self.decorated:
