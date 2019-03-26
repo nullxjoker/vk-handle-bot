@@ -131,7 +131,7 @@ class VkBot:
 
 					for key, option in executable['options'].items() :
 						if function == None :
-							for key1, option1 in update.__dict__.items() :
+							for key1, option1 in update.items() :
 								if key1 == key and option1 == option :
 									function = executable['function']
 									break
