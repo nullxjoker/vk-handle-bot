@@ -89,6 +89,8 @@ class VkBot:
 								if command == update.text.split(" ")[0].lower():
 									function = executable['function']
 									break
+						else:
+							break
 
 					if executable['options'].get('texts') != None:
 						if function == None:
@@ -96,6 +98,8 @@ class VkBot:
 								if text == update.text:
 									function = executable['function']
 									break
+						else:
+							break
 
 					if executable['options'].get('texts_lower') != None:
 						if function == None:
@@ -103,6 +107,8 @@ class VkBot:
 								if text == update.text.lower():
 									function = executable['function']
 									break
+						else:
+							break
 
 					if executable['options'].get('priveleged_type') != None:
 						if function == None:
@@ -110,6 +116,8 @@ class VkBot:
 								if len(re.findall(regexp, update.text)) > 0:
 									function = executable['function']
 									break
+						else:
+							break
 
 					if len(update.attachments) != 0:
 						if function == None:
