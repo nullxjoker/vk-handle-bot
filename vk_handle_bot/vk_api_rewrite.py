@@ -18,7 +18,19 @@ class KeyboardColor(Enum):
 	NEGATIVE = "negative" # красная
 	POSITIVE = "positive" # зелёная
 
+	BLUE = "primary" # синяя
+	WHITE = "default" # белая
+	RED = "negative" # красная
+	GREEN = "positive" # зелёная
+
 class VkBot:
+
+	def __setattr__(self, name, value):
+		# if name not in self.__dict__:
+		self.__dict__[name] = value
+
+		# return self.__dict__[name]
+
 	priveleged_types = {
 		"text": r"\w+"
 	}
@@ -29,10 +41,8 @@ class VkBot:
 		self.after_function = None
 		self.default_function = None
 
-
 		self.decorated = list()
 		self.next_steps = dict()
-		self.last_update = None
 
 		self.vk_session = self.new_vk_session(token)
 		self.vk = self.vk_session.get_api()
@@ -59,14 +69,7 @@ class VkBot:
 	def message_handler(self, **kwargs):
 		def decorate(function):
 			def wrapper(e):
-				if self.before_function != None:
-					try: self.before_function(e)
-					except Exception as s:
-						print(f"Остановлена работа скрипта. {s}")
-						return
 				function(e)
-				if self.after_function != None:
-					self.after_function(e)
 			self.decorated.append(dict(function=wrapper, options=kwargs))
 			return wrapper
 		return decorate
@@ -76,78 +79,89 @@ class VkBot:
 
 	def process_new_update(self, update):
 		function = None
-		print(update.__dict__)
-		if update != self.last_update:
-			if self.next_steps.get(update.user_id) == None:
-				for executable in self.decorated:
-					if function == None:
-						if executable['options'].get('commands') != None:
-							if function == None:
-								for command in executable['options'].get("commands"):
-									if command == update.text.split(" ")[0].lower():
+		if self.next_steps.get(update.user_id) == None:
+			for executable in self.decorated:
+				if function == None:
+
+					if executable['options'].get('commands') != None:
+						if function == None:
+							for command in executable['options'].get("commands"):
+								if command == update.text.split(" ")[0].lower():
+									function = executable['function']
+									break
+
+					if executable['options'].get('texts') != None:
+						if function == None:
+							for text in executable['options'].get("texts"):
+								if text == update.text:
+									function = executable['function']
+									break
+
+					if executable['options'].get('texts_lower') != None:
+						if function == None:
+							for text in executable['options'].get("texts_lower"):
+								if text == update.text.lower():
+									function = executable['function']
+									break
+
+					if executable['options'].get('priveleged_type') != None:
+						if function == None:
+							for _type, regexp in self.priveleged_types.items():
+								if len(re.findall(regexp, update.text)) > 0:
+									function = executable['function']
+									break
+
+					if len(update.attachments) != 0:
+						if function == None:
+							for attachment in update.attachments:
+								if 'type' in attachment:
+									if update.attachments[attachment] == executable['options'].get('content_type'):
 										function = executable['function']
 										break
+						else:
+							break
 
-						if executable['options'].get('texts') != None:
-							if function == None:
-								for text in executable['options'].get("texts"):
-									if text == update.text:
-										function = executable['function']
-										break
-
-						if executable['options'].get('texts_lower') != None:
-							if function == None:
-								for text in executable['options'].get("texts_lower"):
-									if text == update.text.lower():
-										function = executable['function']
-										break
-
-						if executable['options'].get('priveleged_type') != None:
-							if function == None:
-								for _type, regexp in self.priveleged_types.items():
-									if len(re.findall(regexp, update.text)) > 0:
-										function = executable['function']
-										break
-
-						if len(update.attachments) != 0:
-							if function == None:
-								for attachment in update.attachments:
-									if 'type' in attachment:
-										if update.attachments[attachment] == executable['options'].get('content_type'):
-											function = executable['function']
-											break
-							else:
-								break
-
-						for key, option in executable['options'].items() :
-							if function == None :
-								for key1, option1 in update.__dict__.items() :
-									if key1 == key and option1 == option :
-										function = executable['function']
-										break
-							else :
-								break
-					else:
-						break
-			else:
-				function = self.next_steps[update.user_id]
-
-			try: update.payload = json.loads(update.payload) if self.loading_payload != False else update.payload
-			except: pass
-			try: update.__dict__.update({"splitted":update.text.split(" ")})
-			except Exception as e: print(e)
-			if function != None:
-				function(update)
-			else:
-				if self.default_function != None:
-					self.default_function(update)
-			self.last_update = update
+					for key, option in executable['options'].items() :
+						if function == None :
+							for key1, option1 in update.__dict__.items() :
+								if key1 == key and option1 == option :
+									function = executable['function']
+									break
+						else :
+							break
+				else:
+					break
 		else:
-			return "Already processed"
+			function = self.next_steps[update.user_id]
+
+		if "payload" not in update:
+			update.update(dict(payload=dict()))
+		else:
+			if self.loading_payload == True:
+				update.update(dict(payload=json.loads(update.payload)))
+
+		try: update.update(dict(splitted=update.text.split(" ")))
+		except Exception as e: print(e)
+
+		if function != None:
+			if self.before_function != None:
+				try:
+					self.before_function(update)
+				except Exception as e:
+					print(f"Остановлена работа скрипта. {e}")
+					return
+
+			function(update)
+
+			if self.after_function != None:
+				self.after_function(update)
+		else:
+			if self.default_function != None:
+				self.default_function(update)
 
 	def polling(self):
 		for event in self.long_poll.listen():
-			print(event)
+			# print(event)
 			if event.type == VkBotEventType.MESSAGE_NEW:
 				self.process_new_update(event.object)
 
@@ -172,5 +186,5 @@ class VkBot:
 			action=dict(
 				type="text", payload=payload, label=text
 			),
-			color=color
+			color=color.value
 		)
