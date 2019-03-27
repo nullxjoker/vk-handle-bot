@@ -42,7 +42,8 @@ class VkBot:
 		self.default_function = None
 
 		self.decorated = list()
-		self.next_steps = dict()
+		# self.next_steps = dict()
+		self.next_steps = list()
 
 		self.vk_session = self.new_vk_session(token)
 		self.vk = self.vk_session.get_api()
@@ -61,10 +62,24 @@ class VkBot:
 		return vk_api.VkApi(token=token)
 
 	def register_next_step(self, function, event):
-		self.next_steps.update({event.user_id: function})
+		for i, info in enumerate(self.next_steps):
+			if info.get("id") == event.from_id:
+				del self.next_steps[i]
+				break
+		self.next_steps.append({"id":event.from_id, "function":function})
 
 	def unset_next_step(self, event):
-		self.next_steps.update({event.user_id: None})
+		for i, info in enumerate(self.next_steps):
+			if info.get("id") == event.from_id:
+				del self.next_steps[i]
+				return
+
+	def get_next_step(self, event):
+		for info in self.next_steps:
+			if info.get("id") == event.from_id:
+				return info.get("function")
+
+		return None
 
 	def message_handler(self, **kwargs):
 		def decorate(function):
@@ -79,7 +94,7 @@ class VkBot:
 
 	def process_new_update(self, update):
 		function = None
-		if self.next_steps.get(update.user_id) == None:
+		if self.get_next_step(update) == None:
 			for executable in self.decorated:
 				if function == None:
 
@@ -140,7 +155,7 @@ class VkBot:
 				else:
 					break
 		else:
-			function = self.next_steps[update.user_id]
+			function = self.get_next_step(update)
 
 		if "payload" not in update:
 			update.update(dict(payload=dict()))

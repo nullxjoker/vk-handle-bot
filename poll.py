@@ -62,6 +62,7 @@ def get_variant(event):
 	bot.register_next_step(get_started, event)
 
 def get_started(event):
+
 	reply = ""
 	if event.payload.get("response") != None:
 		if event.payload.get("response") == False:
