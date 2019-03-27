@@ -94,7 +94,9 @@ class VkBot:
 
 	def process_new_update(self, update):
 		function = None
-		if self.get_next_step(update) == None:
+
+		next_step = self.get_next_step(update)
+		if next_step == None:
 			for executable in self.decorated:
 				if function == None:
 
@@ -155,7 +157,7 @@ class VkBot:
 				else:
 					break
 		else:
-			function = self.get_next_step(update)
+			function = next_step
 
 		if "payload" not in update:
 			update.update(dict(payload=dict()))
