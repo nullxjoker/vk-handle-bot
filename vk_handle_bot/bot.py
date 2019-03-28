@@ -1,43 +1,87 @@
-from collections import namedtuple
-import vk as vk_api
-import time
-import threading
+import json
 import random
 import re
-import json
-class VkBot :
-	"""Библиотека для быстрого создания бота для вконтакте"""
+import threading
+import time
+from enum import Enum
+from collections import namedtuple
+
+import vk_api
+from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType, DotDict, VkBotMessageEvent
+
+class KeyboardColor(Enum):
+	"""
+	Возможные цвета кнопок
+	"""
+	PRIMARY = "primary" # синяя
+	DEFAULT = "default" # белая
+	NEGATIVE = "negative" # красная
+	POSITIVE = "positive" # зелёная
+
+	BLUE = "primary" # синяя
+	WHITE = "default" # белая
+	RED = "negative" # красная
+	GREEN = "positive" # зелёная
+
+class VkBot:
+
+	def __setattr__(self, name, value):
+		self.__dict__[name] = value
+
 	priveleged_types = {
-		"text" : r"\w+"
+		"text": r"\w+"
 	}
-	def __init__(self, token, tokens=None, **kwargs):
-		self.decorated = []
-		self.last_update = None
-		self.next_steps = dict()	
-		self.vk = self.new_vk_session(token)
+	def __init__(self, token, group_id=None, tokens=None):
+
+		self.loading_payload = False
+		self.before_function = None
+		self.after_function = None
+		self.default_function = None
+
+		self.decorated = list()
+		self.next_steps = list()
+
+		self.vk_session = self.new_vk_session(token)
+		self.vk = self.vk_session.get_api()
+
+		if group_id != None:
+			self.long_poll = VkBotLongPoll(self.vk_session, group_id)
+
 		if tokens != None:
 			for arg in tokens:
 				self.__dict__[arg['name']] = self.new_vk_session(arg['token'])
 
+	def to_event_object(self, raw):
+		return VkBotMessageEvent(raw)
+
 	def new_vk_session(self, token):
-		return vk_api.API(
-			vk_api.Session(access_token=token),
-			v="5.92",
-			lang="ru",
-			timeout=10
-		)
+		return vk_api.VkApi(token=token)
 
-	def register_next_step(self, function, from_id):
-		self.next_steps.update({from_id:function})
+	def register_next_step(self, function, event):
+		for i, info in enumerate(self.next_steps):
+			if info.get("id") == event.from_id:
+				del self.next_steps[i]
+				break
+		self.next_steps.append({"id":event.from_id, "function":function})
 
-	def unset_next_step(self, from_id):
-		self.next_steps.update({from_id:None})
+	def unset_next_step(self, event):
+		for i, info in enumerate(self.next_steps):
+			if info.get("id") == event.from_id:
+				del self.next_steps[i]
+				return
+
+	def get_next_step(self, event):
+		for info in self.next_steps:
+			if info.get("id") == event.from_id:
+				return info.get("function")
+
+		return None
 
 	def message_handler(self, **kwargs):
 		def decorate(function):
 			def wrapper(e):
-				pass
-			self.decorated.append(dict(function=function, options=kwargs))
+				function(e)
+			self.decorated.append(dict(function=wrapper, options=kwargs))
 			return wrapper
 		return decorate
 
@@ -45,97 +89,106 @@ class VkBot :
 		self.decorated.append(dict(function=function, options=kwargs))
 
 	def process_new_update(self, update):
-		counter = 0
 		function = None
-		if update != self.last_update:
-			if self.next_steps.get(update['from_id']) == None:
-				for executable in self.decorated:
-					if function == None :
-						if executable['options'].get("commands") != None:
-							if function == None :
-								for command in executable['options'].get("commands"):
-									if command == update['text'].split(" ")[0].lower():
-										function = executable['function']
-										break
 
-						if executable['options'].get("texts") != None:
-							if function == None :
-								for text in executable['options'].get("texts"):
-									if text == update['text'].lower():
-										function = executable['function']
-										break
+		next_step = self.get_next_step(update)
+		if next_step == None:
+			for executable in self.decorated:
+				if function == None:
 
-						elif executable['options'].get("priveleged_type") != None :
-							if function == None :
-								for _type, regexp in self.priveleged_types.items() :
-									if len(re.findall(regexp, update["text"])) > 0:
-										function = executable['function']
-										break
+					if executable['options'].get('commands') != None:
+						if function == None:
+							for command in executable['options'].get("commands"):
+								if command == update.text.split(" ")[0].lower():
+									function = executable['function']
+									break
+						else:
+							break
 
-						elif len(update['attachments']) != 0 :
-							if function == None :
-								for attachment in update['attachments'] :
-									if attachment['type'] == executable['options'].get('content_type') :
-										function = executable['function']
-										break
-							else :
-								break
-						for key, option in executable['options'].items() :
-							if function == None :
-								for key1, option1 in update.items() :
-									if key1 == key and option1 == option :
-										function = executable['function']
-										break
-							else :
-								break
-					else :
-						break
-			else:
-				function = self.next_steps[update['from_id']]
+					if executable['options'].get('texts') != None:
+						if function == None:
+							for text in executable['options'].get("texts"):
+								if text == update.text:
+									function = executable['function']
+									break
+						else:
+							break
 
-			if function != None :
-				update['splitted'] = update['text'].split(" ")
-				
-				if "payload" in list(update.keys()):
-					update['payload'] = json.loads(update['payload'])
+					if executable['options'].get('texts_lower') != None:
+						if function == None:
+							for text in executable['options'].get("texts_lower"):
+								if text == update.text.lower():
+									function = executable['function']
+									break
+						else:
+							break
+
+					if executable['options'].get('priveleged_type') != None:
+						if function == None:
+							for _type, regexp in self.priveleged_types.items():
+								if len(re.findall(regexp, update.text)) > 0:
+									function = executable['function']
+									break
+						else:
+							break
+
+					if len(update.attachments) != 0:
+						if function == None:
+							for attachment in update.attachments:
+								if 'type' in attachment:
+									if update.attachments[attachment] == executable['options'].get('content_type'):
+										function = executable['function']
+										break
+						else:
+							break
+
+					for key, option in executable['options'].items() :
+						if function == None :
+							for key1, option1 in update.items() :
+								if key1 == key and option1 == option :
+									function = executable['function']
+									break
+						else :
+							break
 				else:
-					update['payload'] = {}
-
-				function(namedtuple("Update", update.keys())(*update.values()))
-				self.last_update = update
+					break
 		else:
-			return "Already processed"
+			function = next_step
 
-	def polling(self, interval=1) :
-		last_ts = None
-		ts = self.vk.messages.getLongPollServer()['ts']
-		try: my_id = self.vk.users.get()[0]['id']
-		except: my_id = None
-		while True :
-			updates = self.vk.messages.getLongPollHistory(
-				ts=ts, fields="photo,photo_medium_rec,sex,online,screen_name"
-			)['messages']['items']
-			try:
-				if (ts != last_ts and len(updates[0]) > 0
-					and updates[0] != self.last_update
-					and "-" not in str(updates[0]['from_id'])
-					and updates[0]['from_id'] != my_id
-					) :
-					th = threading.Thread(
-						target=lambda:self.process_new_update(updates[0])
-						)
-					th.start()
-					last_ts = ts
-					self.last_update = updates[0]
-			except IndexError:
-				pass
+		if "payload" not in update:
+			update.update(dict(payload=dict()))
+		else:
+			if self.loading_payload == True:
+				update.update(dict(payload=json.loads(update.payload)))
 
-			ts = self.vk.messages.getLongPollServer()['ts']
-			time.sleep(interval)
-			
-	def send_message(self, peer_id, text, attachment=None, keyboard=None) :
+		try: update.update(dict(splitted=update.text.split(" ")))
+		except Exception as e: print(e)
+
+		if function != None:
+			if self.before_function != None:
+				try:
+					self.before_function(update)
+				except Exception as e:
+					print(f"Остановлена работа скрипта. {e}")
+					return
+
+			function(update)
+
+			if self.after_function != None:
+				self.after_function(update)
+		else:
+			if self.default_function != None:
+				self.default_function(update)
+
+	def polling(self):
+		for event in self.long_poll.listen():
+			# print(event)
+			if event.type == VkBotEventType.MESSAGE_NEW:
+				self.process_new_update(event.object)
+
+	def send_message(self, text, peer_id, attachment=None, keyboard=None):
 		return self.vk.messages.send(
-			random_id=random.randint(0, 12000000),
+			random_id=time.time() + random.randint(0, 12000000),
 			peer_id=peer_id,
 			attachment=attachment,
 			message=text,
@@ -154,5 +207,5 @@ class VkBot :
 			action=dict(
 				type="text", payload=payload, label=text
 			),
-			color=color
+			color=color.value
 		)
