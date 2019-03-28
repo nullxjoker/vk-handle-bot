@@ -1,1 +1,1 @@
-from vk_handle_bot.bot import VkBot
+from vk_handle_bot.bot import VkBot, KeyboardColor

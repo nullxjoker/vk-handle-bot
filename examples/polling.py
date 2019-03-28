@@ -2,7 +2,7 @@ from vk_handle_bot import VkBot, KeyboardColor
 import random
 import time
 
-bot = VkBot("b779111702115ac7bf2456c3fb6ae73b32da51de87bec22f101bc0970039f4d0fd9b2d320d30822991795", 180137983)
+bot = VkBot("7a44fd160101e2df5c671f83096767201dc6ca4d1d62f6e729b2d7d3084a4efcc4ae6f61f0272292d3585", 180137983)
 
 # Если True, то payload будет возвращаться как словарь, иначе как строка
 bot.loading_payload = True
