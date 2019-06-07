@@ -9,6 +9,13 @@ from collections import namedtuple
 import vk_api
 from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType, DotDict, VkBotMessageEvent
 
+import vk as vk_database
+
+class VkApi(vk_database.API):
+	def __init__(this, token):
+		session = vk_database.Session(token)
+		vk_database.API.__init__(this, session=session, v="5.95", lang="ru", timeout=10)
+
 class KeyboardColor(Enum):
 	"""
 	Возможные цвета кнопок
@@ -31,9 +38,11 @@ class VkBot:
 	priveleged_types = {
 		"text": r"\w+"
 	}
+
 	def __init__(self, token, group_id=None, tokens=None):
 
 		self.loading_payload = False
+
 		self.before_function = None
 		self.after_function = None
 		self.default_function = None
@@ -41,11 +50,12 @@ class VkBot:
 		self.decorated = list()
 		self.next_steps = list()
 
-		self.vk_session = self.new_vk_session(token)
+		self.vk_session = vk_api.VkApi(token=token)
 		self.vk = self.vk_session.get_api()
-
 		if group_id != None:
 			self.long_poll = VkBotLongPoll(self.vk_session, group_id)
+		else:
+			raise Exception("Укажите ID группы")
 
 		if tokens != None:
 			for arg in tokens:
@@ -55,7 +65,7 @@ class VkBot:
 		return VkBotMessageEvent(raw)
 
 	def new_vk_session(self, token):
-		return vk_api.VkApi(token=token)
+		return VkApi(token=token)
 
 	def register_next_step(self, function, event):
 		for i, info in enumerate(self.next_steps):
@@ -91,6 +101,15 @@ class VkBot:
 	def process_new_update(self, update):
 		function = None
 
+		if "payload" not in update:
+			update.update(dict(payload=dict()))
+		else:
+			if self.loading_payload == True:
+				update.update(dict(payload=json.loads(update.payload)))
+
+		try: update.update(dict(splitted=update.text.split(" ")))
+		except Exception as e: print(e)
+
 		next_step = self.get_next_step(update)
 		if next_step == None:
 			for executable in self.decorated:
@@ -102,6 +121,14 @@ class VkBot:
 								if command == update.text.split(" ")[0].lower():
 									function = executable['function']
 									break
+						else:
+							break
+
+					if executable['options'].get('func') != None:
+						if function == None:
+							if executable['options']['func'](update) == True:
+								function = executable['function']
+								break
 						else:
 							break
 
@@ -142,47 +169,37 @@ class VkBot:
 						else:
 							break
 
-					for key, option in executable['options'].items() :
-						if function == None :
-							for key1, option1 in update.items() :
-								if key1 == key and option1 == option :
+					for key, option in executable['options'].items():
+						if function == None:
+							for key1, option1 in update.items():
+								if key1 == key and option1 == option:
 									function = executable['function']
 									break
-						else :
+						else:
 							break
 				else:
 					break
 		else:
 			function = next_step
 
-		if "payload" not in update:
-			update.update(dict(payload=dict()))
-		else:
-			if self.loading_payload == True:
-				update.update(dict(payload=json.loads(update.payload)))
-
-		try: update.update(dict(splitted=update.text.split(" ")))
-		except Exception as e: print(e)
+		if self.before_function != None:
+			try:
+				self.before_function(update)
+			except Exception as e:
+				print(f"Остановлена работа скрипта. {e}")
+				return
 
 		if function != None:
-			if self.before_function != None:
-				try:
-					self.before_function(update)
-				except Exception as e:
-					print(f"Остановлена работа скрипта. {e}")
-					return
-
 			function(update)
-
-			if self.after_function != None:
-				self.after_function(update)
 		else:
 			if self.default_function != None:
 				self.default_function(update)
 
+		if self.after_function != None:
+			self.after_function(update)
+
 	def polling(self):
 		for event in self.long_poll.listen():
-			# print(event)
 			if event.type == VkBotEventType.MESSAGE_NEW:
 				self.process_new_update(event.object)
 
